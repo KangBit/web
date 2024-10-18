@@ -1,0 +1,62 @@
+@import url(reset.css);
+
+body {
+  background-color: #eee;
+}
+
+.swiper-container {
+  position: relative;
+  width: 60%;
+  aspect-ratio: 2;
+  margin: auto;
+}
+
+.swiper {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.swiper-wrapper {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+
+  transition: transform 0.5s linear;
+}
+
+.swiper-slide {
+  background-color: white;
+
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  flex-shrink: 0;
+
+  font-size: 2rem;
+}
+
+.btn-left {
+  left: 0;
+  top: 50%;
+  padding: 2rem;
+  transform: translate(0, -50%);
+  position: absolute;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.btn-right {
+  right: 0;
+  top: 50%;
+  padding: 2rem;
+  transform: translate(0, -50%);
+  position: absolute;
+  cursor: pointer;
+  z-index: 2;
+}
