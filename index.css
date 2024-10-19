@@ -40,22 +40,22 @@ body {
   font-size: 2rem;
 }
 
-.btn-left {
-  left: 0;
-  top: 50%;
+.swiper-container .btn-arrow {
   padding: 2rem;
-  transform: translate(0, -50%);
+  font-size: 2rem;
   position: absolute;
   cursor: pointer;
   z-index: 2;
 }
 
+.btn-left {
+  left: 0;
+  top: 50%;
+  transform: translate(0, -50%);
+}
+
 .btn-right {
   right: 0;
   top: 50%;
-  padding: 2rem;
   transform: translate(0, -50%);
-  position: absolute;
-  cursor: pointer;
-  z-index: 2;
 }

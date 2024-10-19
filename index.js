@@ -84,10 +84,10 @@ if (loop) {
 
 setEventListeners();
 
-setInterval(() => {
-  if (isSliding) {
-    return;
-  }
-  slideIndex = slideIndex + 1;
-  slideTo(slideIndex);
-}, 500);
+// setInterval(() => {
+//   if (isSliding) {
+//     return;
+//   }
+//   slideIndex = slideIndex + 1;
+//   slideTo(slideIndex);
+// }, 1000);
