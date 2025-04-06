@@ -1,0 +1,96 @@
+/* Step 1 */
+li {
+  list-style-type: none;
+}
+
+.scroll-layout {
+  width: 100vw;
+  display: flex;
+  justify-content: center;
+}
+
+.carousel {
+  width: 80%;
+  display: grid;
+  grid: 30vmin / auto-flow 40%;
+  gap: 15px;
+  padding: 0;
+  margin: 0;
+
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.carousel-item {
+  border: 3px solid #888;
+  scroll-snap-align: center;
+}
+
+/* Step 2 */
+.carousel {
+  anchor-name: --carousel;
+
+  &::scroll-button(*) {
+    position: fixed;
+    position-anchor: --carousel;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid #999;
+
+    margin: 5px;
+  }
+
+  &::scroll-button(left) {
+    position-area: inline-start center;
+    content: "⬅" / "Scroll Left";
+  }
+
+  &::scroll-button(right) {
+    position-area: inline-end center;
+    content: "⮕" / "Scroll Right";
+  }
+}
+
+.carousel-item {
+  scroll-snap-stop: always;
+}
+
+/* Step 3 */
+.carousel {
+  scroll-marker-group: after;
+
+  &::scroll-marker-group {
+    position: fixed;
+    position-anchor: --carousel;
+    position-area: block-end;
+
+    display: grid;
+    place-content: safe center;
+    grid: 16px / auto-flow 16px;
+    gap: 15px;
+    padding: 15px;
+  }
+}
+
+.carousel-item {
+  &::scroll-marker {
+    content: " "; /* empty content is fine, just like ::before */
+
+    /* style it as you need */
+    border: 1px solid #bbb;
+    border-radius: 50%;
+    outline-offset: 4px;
+  }
+
+  &::scroll-marker:is(:hover, :focus-visible) {
+    border-color: LinkText;
+  }
+
+  &::scroll-marker:target-current {
+    background: LinkText;
+    border-color: LinkText;
+  }
+}
