@@ -51,25 +51,37 @@ const vertexBufferLayout = {
 
 // 쉐이더 코드 작성 ( WGSL )
 const shaderCode = `
-        @group(0) @binding(0) var<uniform> grid: vec2f;
+  struct VertexInput {
+    @location(0) pos: vec2f,
+    @builtin(instance_index) instance: u32,
+  };
 
-        @vertex
-        fn vertexMain(@location(0) pos: vec2f, @builtin(instance_index) instance: u32) 
-        -> @builtin(position) vec4f
-        {
-          let i = f32(instance); // 인스턴스 인덱스를 실수로 변환
-          let cell = vec2f(i % grid.x, floor(i / grid.x)); // 인스턴스 인덱스를 그리드 크기에 따라 조정
-          let cellOffset = cell / grid * 2; // 인스턴스 인덱스를 그리드 크기에 따라 조정
-          let gridPos = (pos + 1) / grid - 1 + cellOffset; // 꼭짓점 위치를 그리드 크기에 따라 조정
+  struct VertexOutput {
+    @builtin(position) pos: vec4f,
+    @location(0) cell: vec2f, // New line!
+  };
 
-          return vec4f(gridPos, 0, 1);
-        }
+  @group(0) @binding(0) var<uniform> grid: vec2f;
 
-        @fragment
-        fn fragmentMain() -> @location(0) vec4f {
-          return vec4f(1, 0, 0, 1);
-        }
-      `;
+  @vertex
+  fn vertexMain(input: VertexInput) -> VertexOutput {
+    let i = f32(input.instance); // 인스턴스 인덱스를 실수로 변환
+    let cell = vec2f(i % grid.x, floor(i / grid.x)); // 인스턴스 인덱스를 그리드 크기에 따라 조정
+    let cellOffset = cell / grid * 2; // 인스턴스 인덱스를 그리드 크기에 따라 조정
+    let gridPos = (input.pos + 1) / grid - 1 + cellOffset; // 꼭짓점 위치를 그리드 크기에 따라 조정
+
+    var output: VertexOutput;
+    output.pos = vec4f(gridPos, 0, 1); // 꼭짓점 위치
+    output.cell = cell; // 꼭짓점이 속한 셀의 좌표
+    return output;
+  }
+
+  @fragment
+  fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
+    let cell = input.cell / grid;
+    return vec4f(cell, 1 - cell.x, 1);
+  }
+`;
 
 // 쉐이더 모듈 생성
 const cellShaderModule = device.createShaderModule({
