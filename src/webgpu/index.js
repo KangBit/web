@@ -19,6 +19,71 @@ context.configure({
   format: canvasFormat,
 });
 
+// 바인드 그룹 레이아웃 생성
+const bindGroupLayout = device.createBindGroupLayout({
+  label: "Cell Bind Group Layout",
+  entries: [
+    {
+      binding: 0,
+      visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+      buffer: {},
+    },
+    {
+      binding: 1,
+      visibility: GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE,
+      buffer: { type: "read-only-storage" },
+    },
+    {
+      binding: 2,
+      visibility: GPUShaderStage.COMPUTE,
+      buffer: { type: "storage" },
+    },
+  ],
+});
+
+// 파이프라인 레이아웃 생성
+const pipelineLayout = device.createPipelineLayout({
+  label: "Cell Pipeline Layout",
+  bindGroupLayouts: [bindGroupLayout],
+});
+
+// 시뮬레이션 쉐이더 코드 ( WGSL )
+const WORKGROUP_SIZE = 8;
+const simulationShaderCode = `
+        @group(0) @binding(0) var<uniform> grid: vec2f;
+        @group(0) @binding(1) var<storage> cellStateIn: array<u32>;
+        @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
+
+        fn cellIndex(cell: vec2u) -> u32 {
+          return cell.y * u32(grid.x) + cell.x;
+        }
+
+        @compute @workgroup_size(${WORKGROUP_SIZE}, ${WORKGROUP_SIZE})
+        fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
+          if (cellStateIn[cellIndex(cell.xy)] == 1) {
+            cellStateOut[cellIndex(cell.xy)] = 0;
+          } else {
+            cellStateOut[cellIndex(cell.xy)] = 1;
+          }
+        }
+      `;
+
+// 시뮬레이션 쉐이더 모듈 생성
+const simulationShaderModule = device.createShaderModule({
+  label: "Game of Life simulation shader",
+  code: simulationShaderCode,
+});
+
+// 시뮬레이션 파이프라인 생성
+const simulationPipeline = device.createComputePipeline({
+  label: "Simulation pipeline",
+  layout: pipelineLayout,
+  compute: {
+    module: simulationShaderModule,
+    entryPoint: "computeMain",
+  },
+});
+
 // 사각형을 이루는 두 삼각형의 꼭짓점 정의 (TypeArray)
 const vertices = new Float32Array([
   // Triangle 1
@@ -75,14 +140,13 @@ const shaderCode = `
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1); // 꼭짓점 위치
-    output.cell = cell; // 꼭짓점이 속한 셀의 좌표
+    output.cell = cell / grid; // 꼭짓점이 속한 셀의 좌표
     return output;
   }
 
   @fragment
   fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-    let cell = input.cell / grid;
-    return vec4f(cell, 1 - cell.x, 1);
+    return vec4f(input.cell, 1 - input.cell.x, 1);
   }
 `;
 
@@ -95,7 +159,7 @@ const cellShaderModule = device.createShaderModule({
 // 렌더 파이프라인 생성
 const cellPipeline = device.createRenderPipeline({
   label: "Cell pipeline",
-  layout: "auto",
+  layout: pipelineLayout,
   vertex: {
     module: cellShaderModule,
     entryPoint: "vertexMain", // 모든 꼭짓점 셰이더에 대해 호출되는 함수 이름
@@ -151,7 +215,7 @@ device.queue.writeBuffer(cellStateStorage[1], 0, cellStateArray);
 const bindGroups = [
   device.createBindGroup({
     label: "Cell renderer bind group A",
-    layout: cellPipeline.getBindGroupLayout(0),
+    layout: bindGroupLayout,
     entries: [
       {
         binding: 0,
@@ -161,11 +225,15 @@ const bindGroups = [
         binding: 1, // 셀 상태 버퍼
         resource: { buffer: cellStateStorage[0] },
       },
+      {
+        binding: 2,
+        resource: { buffer: cellStateStorage[1] },
+      },
     ],
   }),
   device.createBindGroup({
     label: "Cell renderer bind group B",
-    layout: cellPipeline.getBindGroupLayout(0),
+    layout: bindGroupLayout,
     entries: [
       {
         binding: 0,
@@ -174,6 +242,10 @@ const bindGroups = [
       {
         binding: 1,
         resource: { buffer: cellStateStorage[1] },
+      },
+      {
+        binding: 2,
+        resource: { buffer: cellStateStorage[0] },
       },
     ],
   }),
@@ -184,10 +256,19 @@ let step = 0; // 시뮬레이션 단계 추적
 
 // 시뮬레이션 업데이트
 function update() {
+  const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
+  const workgroupCount = Math.ceil(GRID_SIZE / WORKGROUP_SIZE);
+  const computePass = encoder.beginComputePass();
+
+  computePass.setPipeline(simulationPipeline);
+  computePass.setBindGroup(0, bindGroups[step % 2]);
+  computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+  computePass.end();
+
   step++;
 
   const view = context.getCurrentTexture().createView();
-  const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
+
   const clearColor = { r: 0, g: 0.3, b: 0, a: 1 };
   const pass = encoder.beginRenderPass({
     colorAttachments: [
