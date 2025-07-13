@@ -62,13 +62,16 @@ const shaderCode = `
   };
 
   @group(0) @binding(0) var<uniform> grid: vec2f;
+  @group(0) @binding(1) var<storage> cellState: array<u32>;
 
   @vertex
   fn vertexMain(input: VertexInput) -> VertexOutput {
     let i = f32(input.instance); // 인스턴스 인덱스를 실수로 변환
+    let state = f32(cellState[input.instance]); // 셀 상태를 실수로 변환
     let cell = vec2f(i % grid.x, floor(i / grid.x)); // 인스턴스 인덱스를 그리드 크기에 따라 조정
+
     let cellOffset = cell / grid * 2; // 인스턴스 인덱스를 그리드 크기에 따라 조정
-    let gridPos = (input.pos + 1) / grid - 1 + cellOffset; // 꼭짓점 위치를 그리드 크기에 따라 조정
+    let gridPos = (input.pos * state + 1) / grid - 1 + cellOffset; // 꼭짓점 위치를 그리드 크기에, 셀 상태에 따라 따라 조정
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1); // 꼭짓점 위치
@@ -110,7 +113,7 @@ const cellPipeline = device.createRenderPipeline({
 });
 
 // 그리드 크기를 저장하는 유니폼 버퍼 생성
-const GRID_SIZE = 18; // 그리드 크기
+const GRID_SIZE = 32; // 그리드 크기
 const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
 const uniformBuffer = device.createBuffer({
   label: "Grid Uniforms",
@@ -118,6 +121,18 @@ const uniformBuffer = device.createBuffer({
   usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
 });
 device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
+
+// 셀 상태를 저장하는 버퍼 생성
+const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
+const cellStateStorage = device.createBuffer({
+  label: "Cell State",
+  size: cellStateArray.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+});
+for (let i = 0; i < cellStateArray.length; i += 3) {
+  cellStateArray[i] = 1; // 셀 상태를 1로 설정
+}
+device.queue.writeBuffer(cellStateStorage, 0, cellStateArray);
 
 // 바인드 그룹 생성
 const bindGroup = device.createBindGroup({
@@ -127,6 +142,10 @@ const bindGroup = device.createBindGroup({
     {
       binding: 0,
       resource: { buffer: uniformBuffer },
+    },
+    {
+      binding: 1,
+      resource: { buffer: cellStateStorage },
     },
   ],
 });
