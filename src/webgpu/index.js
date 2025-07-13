@@ -51,16 +51,25 @@ const vertexBufferLayout = {
 
 // 쉐이더 코드 작성 ( WGSL )
 const shaderCode = `
-  @vertex
-  fn vertexMain(@location(0) pos: vec2f) -> @builtin(position) vec4f {
-    return vec4f(pos, 0, 1);
-  }
+        @group(0) @binding(0) var<uniform> grid: vec2f;
 
-  @fragment
-  fn fragmentMain() -> @location(0) vec4f {
-    return vec4f(1, 0, 0, 1);
-  }
-`;
+        @vertex
+        fn vertexMain(@location(0) pos: vec2f, @builtin(instance_index) instance: u32) 
+        -> @builtin(position) vec4f
+        {
+          let i = f32(instance); // 인스턴스 인덱스를 실수로 변환
+          let cell = vec2f(i % grid.x, floor(i / grid.x)); // 인스턴스 인덱스를 그리드 크기에 따라 조정
+          let cellOffset = cell / grid * 2; // 인스턴스 인덱스를 그리드 크기에 따라 조정
+          let gridPos = (pos + 1) / grid - 1 + cellOffset; // 꼭짓점 위치를 그리드 크기에 따라 조정
+
+          return vec4f(gridPos, 0, 1);
+        }
+
+        @fragment
+        fn fragmentMain() -> @location(0) vec4f {
+          return vec4f(1, 0, 0, 1);
+        }
+      `;
 
 // 쉐이더 모듈 생성
 const cellShaderModule = device.createShaderModule({
@@ -88,6 +97,29 @@ const cellPipeline = device.createRenderPipeline({
   },
 });
 
+// 그리드 크기를 저장하는 유니폼 버퍼 생성
+const GRID_SIZE = 18; // 그리드 크기
+const uniformArray = new Float32Array([GRID_SIZE, GRID_SIZE]);
+const uniformBuffer = device.createBuffer({
+  label: "Grid Uniforms",
+  size: uniformArray.byteLength,
+  usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+});
+device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
+
+// 바인드 그룹 생성
+const bindGroup = device.createBindGroup({
+  label: "Cell renderer bind group",
+  layout: cellPipeline.getBindGroupLayout(0),
+  entries: [
+    {
+      binding: 0,
+      resource: { buffer: uniformBuffer },
+    },
+  ],
+});
+
+// 그리기 작업 시작
 const view = context.getCurrentTexture().createView(); // 캔버스 컨텍스트에서 텍스처를 가져옴
 const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
 const clearColor = { r: 0, g: 0.3, b: 0, a: 1 };
@@ -104,7 +136,8 @@ const pass = encoder.beginRenderPass({
 
 pass.setPipeline(cellPipeline); // 렌더 파이프라인 설정
 pass.setVertexBuffer(0, vertexBuffer); // 꼭짓점 버퍼 설정
-pass.draw(vertices.length / 2); // 6 vertices (2개의 꼭짓점)
+pass.setBindGroup(0, bindGroup); // 바인드 그룹 설정
+pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices (2개의 꼭짓점)
 
 pass.end(); // 렌더 패스 종료
 device.queue.submit([encoder.finish()]); // 명령어를 기기에 제출
