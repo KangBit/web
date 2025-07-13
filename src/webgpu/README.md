@@ -27,6 +27,8 @@ WebGPU는 웹 앱에서 GPU의 기능에 액세스하기 위한 새로운 최신
 - [WGSL Specification](https://www.w3.org/TR/WGSL/)
 - [A Tour of WGSL](https://sotrh.github.io/learn-wgpu/beginner/wgsl/)
 
+- [WGSL/WESL support for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=wgsl-analyzer.wgsl-analyzer)
+
 ### Samples
 
 - [WebGPU Samples](https://webgpu.github.io/webgpu-samples/)
