@@ -124,51 +124,90 @@ device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
 
 // 셀 상태를 저장하는 버퍼 생성
 const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
-const cellStateStorage = device.createBuffer({
-  label: "Cell State",
-  size: cellStateArray.byteLength,
-  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-});
+const cellStateStorage = [
+  device.createBuffer({
+    label: "Cell State A",
+    size: cellStateArray.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  }),
+  device.createBuffer({
+    label: "Cell State B",
+    size: cellStateArray.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  }),
+];
+
 for (let i = 0; i < cellStateArray.length; i += 3) {
-  cellStateArray[i] = 1; // 셀 상태를 1로 설정
+  cellStateArray[i] = 1;
 }
-device.queue.writeBuffer(cellStateStorage, 0, cellStateArray);
+device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
+
+for (let i = 0; i < cellStateArray.length; i++) {
+  cellStateArray[i] = i % 2;
+}
+device.queue.writeBuffer(cellStateStorage[1], 0, cellStateArray);
 
 // 바인드 그룹 생성
-const bindGroup = device.createBindGroup({
-  label: "Cell renderer bind group",
-  layout: cellPipeline.getBindGroupLayout(0),
-  entries: [
-    {
-      binding: 0,
-      resource: { buffer: uniformBuffer },
-    },
-    {
-      binding: 1,
-      resource: { buffer: cellStateStorage },
-    },
-  ],
-});
+const bindGroups = [
+  device.createBindGroup({
+    label: "Cell renderer bind group A",
+    layout: cellPipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: uniformBuffer },
+      },
+      {
+        binding: 1, // 셀 상태 버퍼
+        resource: { buffer: cellStateStorage[0] },
+      },
+    ],
+  }),
+  device.createBindGroup({
+    label: "Cell renderer bind group B",
+    layout: cellPipeline.getBindGroupLayout(0),
+    entries: [
+      {
+        binding: 0,
+        resource: { buffer: uniformBuffer },
+      },
+      {
+        binding: 1,
+        resource: { buffer: cellStateStorage[1] },
+      },
+    ],
+  }),
+];
 
-// 그리기 작업 시작
-const view = context.getCurrentTexture().createView(); // 캔버스 컨텍스트에서 텍스처를 가져옴
-const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
-const clearColor = { r: 0, g: 0.3, b: 0, a: 1 };
-const pass = encoder.beginRenderPass({
-  colorAttachments: [
-    {
-      view,
-      loadOp: "clear", // 렌더 패스가 시작될 때 텍스처를 지움
-      clearValue: clearColor, // clear 작업을 실행할 때 어떤 색상을 사용할지
-      storeOp: "store", // 렌더 패스가 완료되면 렌더 패스 중에 그리는 결과가 텍스처에 저장
-    },
-  ],
-});
+const UPDATE_INTERVAL = 200; // 200ms마다 업데이트
+let step = 0; // 시뮬레이션 단계 추적
 
-pass.setPipeline(cellPipeline); // 렌더 파이프라인 설정
-pass.setVertexBuffer(0, vertexBuffer); // 꼭짓점 버퍼 설정
-pass.setBindGroup(0, bindGroup); // 바인드 그룹 설정
-pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices (2개의 꼭짓점)
+// 시뮬레이션 업데이트
+function update() {
+  step++;
 
-pass.end(); // 렌더 패스 종료
-device.queue.submit([encoder.finish()]); // 명령어를 기기에 제출
+  const view = context.getCurrentTexture().createView();
+  const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
+  const clearColor = { r: 0, g: 0.3, b: 0, a: 1 };
+  const pass = encoder.beginRenderPass({
+    colorAttachments: [
+      {
+        view,
+        loadOp: "clear", // 렌더 패스가 시작될 때 텍스처를 지움
+        clearValue: clearColor, // clear 작업을 실행할 때 어떤 색상을 사용할지
+        storeOp: "store", // 렌더 패스가 완료되면 렌더 패스 중에 그리는 결과가 텍스처에 저장
+      },
+    ],
+  });
+
+  pass.setPipeline(cellPipeline); // 렌더 파이프라인 설정
+  pass.setVertexBuffer(0, vertexBuffer); // 꼭짓점 버퍼 설정
+  pass.setBindGroup(0, bindGroups[step % 2]); // 바인드 그룹 설정
+  pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE); // 6 vertices (2개의 꼭짓점)
+
+  pass.end(); // 렌더 패스 종료
+  device.queue.submit([encoder.finish()]); // 명령어를 기기에 제출
+}
+
+// 시뮬레이션 업데이트
+setInterval(update, UPDATE_INTERVAL);
