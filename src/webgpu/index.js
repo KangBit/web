@@ -1,3 +1,4 @@
+// WebGPU 지원 여부 확인
 if (!navigator.gpu) {
   throw new Error("WebGPU not supported on this browser.");
 }
@@ -18,7 +19,75 @@ context.configure({
   format: canvasFormat,
 });
 
-// Clear Canvas
+// 사각형을 이루는 두 삼각형의 꼭짓점 정의 (TypeArray)
+const vertices = new Float32Array([
+  // Triangle 1
+  -0.8, -0.8, 0.8, -0.8, 0.8, 0.8,
+  // Triangle 2
+  -0.8, -0.8, 0.8, 0.8, -0.8, 0.8,
+]);
+
+// 꼭짓점 버퍼 생성
+const vertexBuffer = device.createBuffer({
+  label: "Cell vertices",
+  size: vertices.byteLength, // 버퍼의 크기
+  usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, // 버퍼의 용도
+});
+
+// 꼭짓점 버퍼에 데이터 쓰기
+device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
+
+// 꼭짓점 버퍼 레이아웃 정의
+const vertexBufferLayout = {
+  arrayStride: 8, // 다음 꼭짓점을 시작하기 전에 메모리에서 몇 바이트를 건너뛰어야 하는지 (2개의 float32 값)
+  attributes: [
+    {
+      format: "float32x2", // 각 꼭짓점의 형식
+      offset: 0, // 각 꼭짓점의 오프셋
+      shaderLocation: 0, // 꼭짓점 쉐이더의 위치
+    },
+  ],
+};
+
+// 쉐이더 코드 작성 ( WGSL )
+const shaderCode = `
+  @vertex
+  fn vertexMain(@location(0) pos: vec2f) -> @builtin(position) vec4f {
+    return vec4f(pos, 0, 1);
+  }
+
+  @fragment
+  fn fragmentMain() -> @location(0) vec4f {
+    return vec4f(1, 0, 0, 1);
+  }
+`;
+
+// 쉐이더 모듈 생성
+const cellShaderModule = device.createShaderModule({
+  label: "Cell shader",
+  code: shaderCode,
+});
+
+// 렌더 파이프라인 생성
+const cellPipeline = device.createRenderPipeline({
+  label: "Cell pipeline",
+  layout: "auto",
+  vertex: {
+    module: cellShaderModule,
+    entryPoint: "vertexMain", // 모든 꼭짓점 셰이더에 대해 호출되는 함수 이름
+    buffers: [vertexBufferLayout],
+  },
+  fragment: {
+    module: cellShaderModule,
+    entryPoint: "fragmentMain", // 모든 프래그먼트 셰이더에 대해 호출되는 함수 이름
+    targets: [
+      {
+        format: canvasFormat,
+      },
+    ],
+  },
+});
+
 const view = context.getCurrentTexture().createView(); // 캔버스 컨텍스트에서 텍스처를 가져옴
 const encoder = device.createCommandEncoder(); // 기기에서 GPU 명령어를 기록하기 위한 인터페이스를 제공하는 인코더
 const clearColor = { r: 0, g: 0.3, b: 0, a: 1 };
@@ -32,6 +101,10 @@ const pass = encoder.beginRenderPass({
     },
   ],
 });
+
+pass.setPipeline(cellPipeline); // 렌더 파이프라인 설정
+pass.setVertexBuffer(0, vertexBuffer); // 꼭짓점 버퍼 설정
+pass.draw(vertices.length / 2); // 6 vertices (2개의 꼭짓점)
 
 pass.end(); // 렌더 패스 종료
 device.queue.submit([encoder.finish()]); // 명령어를 기기에 제출
